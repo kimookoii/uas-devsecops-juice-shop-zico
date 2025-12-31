@@ -1,0 +1,65 @@
+name: DevSecOps CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  checks: write
+  issues: write
+
+jobs:
+  devsecops:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    # SAST - npm audit
+    - name: Install Dependencies
+      run: npm install
+
+    - name: SAST - npm audit
+      run: |
+        npm audit --audit-level=high || true
+
+    # SCA - Trivy FS Scan
+    - name: Install Trivy
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+
+    - name: SCA - Trivy File System Scan
+      run: |
+        trivy fs . --severity HIGH,CRITICAL || true
+
+    # Build Docker Image
+    - name: Build Docker Image
+      run: |
+        docker build -t juice-shop:ci .
+
+    # Container Scan - Trivy
+    - name: Container Image Scan
+      run: |
+        trivy image juice-shop:ci --severity HIGH,CRITICAL || true
+
+    # Run Juice Shop Container
+    - name: Run Juice Shop
+      run: |
+        docker run -d -p 3000:3000 --name juice-shop-ci juice-shop:ci
+        sleep 30
+
+    # DAST - OWASP ZAP
+    - name: DAST - OWASP ZAP
+      run: |
+        docker run --rm \
+          --network host \
+          zaproxy/zap-stable \
+          zap-baseline.py \
+          -t http://localhost:3000 \
+          -I || true
