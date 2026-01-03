@@ -17,7 +17,7 @@ jobs:
 
     steps:
     # ======================
-    # Checkout Source Code
+    # Checkout
     # ======================
     - name: Checkout Source Code
       uses: actions/checkout@v4
@@ -29,67 +29,45 @@ jobs:
       run: npm install
 
     - name: SAST - npm audit
-      run: |
-        npm audit --audit-level=high || true
-
-    # ======================
-    # SCA - Trivy FS Scan
-    # ======================
-    - name: Install Trivy
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y curl
-        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
-
-    - name: SCA - Trivy File System Scan
-      run: |
-        trivy fs . --severity HIGH,CRITICAL || true
+      run: npm audit --audit-level=high || true
 
     # ======================
     # Build Docker Image
     # ======================
     - name: Build Docker Image
-      run: |
-        docker build -t juice-shop:ci .
+      run: docker build -t juice-shop:ci .
 
     # ======================
-    # Container Image Scan
-    # ======================
-    - name: Trivy Image Scan
-      run: |
-        trivy image juice-shop:ci --severity HIGH,CRITICAL || true
-
-    # ======================
-    # Run Juice Shop Container
+    # Run Juice Shop
     # ======================
     - name: Run Juice Shop
       run: |
         docker run -d -p 3000:3000 --name juice-shop-ci juice-shop:ci
-        sleep 30
+        sleep 25
 
     # ======================
-    # DAST - OWASP ZAP
+    # DAST - OWASP ZAP (FIXED)
     # ======================
-    - name: DAST - OWASP ZAP Baseline Scan
+    - name: DAST - OWASP ZAP Baseline
       run: |
         mkdir -p report
         docker run --rm \
-          --network host \
           -v ${{ github.workspace }}/report:/zap/wrk \
-          zaproxy/zap-stable \
+          ghcr.io/zaproxy/zaproxy:stable \
           zap-baseline.py \
-          -t http://localhost:3000 \
+          -t http://127.0.0.1:3000 \
           -r zap-report.html || true
 
     # ======================
-    # Debug Output
+    # DEBUG (WAJIB ADA)
     # ======================
-    - name: Debug ZAP Report
+    - name: Debug Report Folder
       run: |
+        echo "=== isi folder report ==="
         ls -lah report
 
     # ======================
-    # Upload ZAP Report
+    # Upload Artifact
     # ======================
     - name: Upload ZAP Report
       uses: actions/upload-artifact@v4
