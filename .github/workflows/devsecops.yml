@@ -16,10 +16,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # ======================
+    # Checkout Source Code
+    # ======================
     - name: Checkout Source Code
       uses: actions/checkout@v4
 
+    # ======================
     # SAST - npm audit
+    # ======================
     - name: Install Dependencies
       run: npm install
 
@@ -27,7 +32,9 @@ jobs:
       run: |
         npm audit --audit-level=high || true
 
+    # ======================
     # SCA - Trivy FS Scan
+    # ======================
     - name: Install Trivy
       run: |
         sudo apt-get update
@@ -38,28 +45,54 @@ jobs:
       run: |
         trivy fs . --severity HIGH,CRITICAL || true
 
+    # ======================
     # Build Docker Image
+    # ======================
     - name: Build Docker Image
       run: |
         docker build -t juice-shop:ci .
 
-    # Container Scan - Trivy
-    - name: Container Image Scan
+    # ======================
+    # Container Image Scan
+    # ======================
+    - name: Trivy Image Scan
       run: |
         trivy image juice-shop:ci --severity HIGH,CRITICAL || true
 
+    # ======================
     # Run Juice Shop Container
+    # ======================
     - name: Run Juice Shop
       run: |
         docker run -d -p 3000:3000 --name juice-shop-ci juice-shop:ci
         sleep 30
 
+    # ======================
     # DAST - OWASP ZAP
-    - name: DAST - OWASP ZAP
+    # ======================
+    - name: DAST - OWASP ZAP Baseline Scan
       run: |
+        mkdir -p report
         docker run --rm \
           --network host \
+          -v ${{ github.workspace }}/report:/zap/wrk \
           zaproxy/zap-stable \
           zap-baseline.py \
           -t http://localhost:3000 \
-          -I || true
+          -r zap-report.html || true
+
+    # ======================
+    # Debug Output
+    # ======================
+    - name: Debug ZAP Report
+      run: |
+        ls -lah report
+
+    # ======================
+    # Upload ZAP Report
+    # ======================
+    - name: Upload ZAP Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: zap-report
+        path: report/zap-report.html
